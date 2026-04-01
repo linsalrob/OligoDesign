@@ -160,6 +160,14 @@ class StructuredOligo:
         return sum(1 for b in acgt if b in "GC") / len(acgt)
 
     @property
+    def entropy(self) -> float:
+        """Shannon entropy in bits, computed from ACGT bases only (``N`` bases ignored)."""
+        acgt_only = "".join(b for b in self.sequence if b in _ALL_BASES)
+        if not acgt_only:
+            return 0.0
+        return DNA(acgt_only).entropy()
+
+    @property
     def has_hairpin(self) -> bool:
         """``True`` if the ACGT-only portion of the sequence contains a hairpin.
 
@@ -200,6 +208,7 @@ class StructuredOligo:
             "is_palindrome": self.is_palindrome,
             "inner_is_palindrome": self.inner_is_palindrome,
             "gc_content": self.gc_content,
+            "entropy": self.entropy,
             "has_hairpin": self.has_hairpin,
             "has_tandem_repeat": self.has_tandem_repeat,
         }
@@ -219,6 +228,7 @@ class StructuredOligo:
             str(self.is_palindrome),
             str(self.inner_is_palindrome),
             f"{self.gc_content:.4f}",
+            f"{self.entropy:.4f}",
             str(self.has_hairpin),
             str(self.has_tandem_repeat),
         ]
@@ -239,6 +249,7 @@ class StructuredOligo:
             "is_palindrome",
             "inner_is_palindrome",
             "gc_content",
+            "entropy",
             "has_hairpin",
             "has_tandem_repeat",
         ]

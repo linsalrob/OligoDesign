@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Iterator
 
 # Standard unambiguous DNA bases
@@ -294,6 +295,38 @@ class DNA:
         {'A': 2, 'C': 1, 'G': 1, 'T': 2}
         """
         return {base: self._sequence.count(base) for base in "ACGT"}
+
+    def entropy(self) -> float:
+        """Return the Shannon entropy of the sequence in bits.
+
+        Computed over the four canonical bases (A, C, G, T).  Returns 0.0
+        for an empty sequence or a single-base sequence.
+
+        The maximum value is ``log2(4) = 2.0`` bits, achieved when all four
+        bases are equally represented.
+
+        Returns
+        -------
+        float
+            Shannon entropy in bits.
+
+        Examples
+        --------
+        >>> DNA("ACGT").entropy()
+        2.0
+        >>> DNA("AAAA").entropy()
+        0.0
+        """
+        n = len(self._sequence)
+        if n == 0:
+            return 0.0
+        result = 0.0
+        for base in "ACGT":
+            count = self._sequence.count(base)
+            if count > 0:
+                p = count / n
+                result -= p * math.log2(p)
+        return result
 
     # ------------------------------------------------------------------
     # Motif search

@@ -194,6 +194,8 @@ class OligoAnalysis:
         Sequence length in bases.
     gc_content:
         Fraction of G+C bases (0.0 – 1.0).
+    entropy:
+        Shannon entropy of the sequence in bits (0.0 – 2.0).
     base_composition:
         Per-base counts ``{"A": n, "C": n, "G": n, "T": n}``.
     longest_homopolymer:
@@ -216,6 +218,7 @@ class OligoAnalysis:
     sequence: str
     length: int
     gc_content: float
+    entropy: float
     base_composition: dict[str, int]
     longest_homopolymer: int
     has_homopolymer: bool
@@ -237,6 +240,7 @@ class OligoAnalysis:
             self.sequence,
             str(self.length),
             f"{self.gc_content:.4f}",
+            f"{self.entropy:.4f}",
             str(bc.get("A", 0)),
             str(bc.get("C", 0)),
             str(bc.get("G", 0)),
@@ -258,6 +262,7 @@ class OligoAnalysis:
             "sequence",
             "length",
             "gc_content",
+            "entropy",
             "count_A",
             "count_C",
             "count_G",
@@ -308,6 +313,7 @@ def analyse_oligo(
         sequence=str(dna),
         length=len(dna),
         gc_content=dna.gc_content(),
+        entropy=dna.entropy(),
         base_composition=dna.base_composition(),
         longest_homopolymer=dna.longest_homopolymer(),
         has_homopolymer=dna.has_homopolymer(min_length=min_hp_run),

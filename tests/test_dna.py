@@ -287,6 +287,45 @@ class TestComposition:
 
 
 # ---------------------------------------------------------------------------
+# Shannon entropy
+# ---------------------------------------------------------------------------
+
+
+class TestEntropy:
+    def test_equal_distribution_max_entropy(self) -> None:
+        # ACGT once each -> equal frequencies -> H = log2(4) = 2.0 bits
+        assert DNA("ACGT").entropy() == 2.0
+
+    def test_single_base_zero_entropy(self) -> None:
+        assert DNA("AAAA").entropy() == 0.0
+
+    def test_empty_sequence_zero_entropy(self) -> None:
+        assert DNA("").entropy() == 0.0
+
+    def test_two_equal_bases_entropy(self) -> None:
+        # AATT: 50% A, 50% T -> H = 1.0 bit
+        assert DNA("AATT").entropy() == 1.0
+
+    def test_entropy_range(self) -> None:
+        # Entropy must be between 0.0 and 2.0 for any DNA sequence
+        for seq in ("A", "AC", "ACG", "ACGT", "AACGTT", "AAAAAAAAAG"):
+            h = DNA(seq).entropy()
+            assert 0.0 <= h <= 2.0, f"Entropy out of range for {seq!r}: {h}"
+
+    def test_returns_float(self) -> None:
+        assert isinstance(DNA("ACGT").entropy(), float)
+
+    def test_unequal_distribution_intermediate_entropy(self) -> None:
+        # AACC: 50% A, 50% C -> H = 1.0 bit
+        assert DNA("AACC").entropy() == 1.0
+
+    def test_longer_equal_sequence(self) -> None:
+        # 10 copies of each base -> max entropy
+        seq = "ACGT" * 10
+        assert DNA(seq).entropy() == 2.0
+
+
+# ---------------------------------------------------------------------------
 # Motif search
 # ---------------------------------------------------------------------------
 
