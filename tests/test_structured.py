@@ -224,8 +224,13 @@ class TestStructuredOligoSerialization:
 
     def test_to_dict_has_required_keys(self) -> None:
         d = generate_palindromic_motif(rng=random.Random(1)).to_dict()
-        for key in ("name", "sequence", "length", "oligo_type", "is_palindrome", "gc_content"):
+        for key in ("name", "sequence", "length", "oligo_type", "is_palindrome", "gc_content", "entropy"):
             assert key in d
+
+    def test_to_dict_entropy_value(self) -> None:
+        d = generate_palindromic_motif(rng=random.Random(1)).to_dict()
+        assert isinstance(d["entropy"], float)
+        assert 0.0 <= d["entropy"] <= 2.0
 
     def test_to_tsv_row_is_list_of_strings(self) -> None:
         row = generate_palindromic_motif(rng=random.Random(1)).to_tsv_row()
@@ -291,6 +296,7 @@ class TestSharedWriteWithStructuredOligo:
             assert "oligo_type" in item
             assert "left_arm" in item
             assert "is_palindrome" in item
+            assert "entropy" in item
 
     def test_write_tsv_creates_file(self, tmp_path) -> None:
         path = str(tmp_path / "out.tsv")

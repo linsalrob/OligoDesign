@@ -152,7 +152,7 @@ def _build_parser() -> argparse.ArgumentParser:
 def _print_summary(oligos: list[StructuredOligo]) -> None:
     """Print a human-readable summary table to stdout."""
     header = (
-        f"{'Name':<20} {'Length':>6} {'Type':<20} {'GC%':>6}  "
+        f"{'Name':<20} {'Length':>6} {'Type':<20} {'GC%':>6} {'Entropy':>8}  "
         f"{'Palind':>6} {'Hairpin':>7}"
     )
     print(f"Generated {len(oligos)} structured oligos\n")
@@ -161,7 +161,7 @@ def _print_summary(oligos: list[StructuredOligo]) -> None:
     for oligo in oligos:
         print(
             f"{oligo.name:<20} {oligo.length:>6} {oligo.oligo_type:<20} "
-            f"{oligo.gc_content * 100:>5.1f}%  "
+            f"{oligo.gc_content * 100:>5.1f}% {oligo.entropy:>8.4f}  "
             f"{'yes' if oligo.is_palindrome else 'no':>6} "
             f"{'yes' if oligo.has_hairpin else 'no':>7}"
         )

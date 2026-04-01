@@ -151,7 +151,7 @@ def _print_summary(analyses: list[OligoAnalysis]) -> None:
 
     print(f"Generated {len(analyses)} oligos ({len(flagged)} flagged)\n")
     header = (
-        f"{'Name':<20} {'Length':>6} {'GC%':>6}  "
+        f"{'Name':<20} {'Length':>6} {'GC%':>6} {'Entropy':>8}  "
         f"{'Homopol':>7} {'LowCpx':>6} {'Palind':>6} "
         f"{'Hairpin':>7} {'TandRep':>7} {'XCompl':>6}"
     )
@@ -160,7 +160,7 @@ def _print_summary(analyses: list[OligoAnalysis]) -> None:
     for a in analyses:
         xcompl = "yes" if a.complementary_to else "no"
         print(
-            f"{a.name:<20} {a.length:>6} {a.gc_content * 100:>5.1f}%  "
+            f"{a.name:<20} {a.length:>6} {a.gc_content * 100:>5.1f}% {a.entropy:>8.4f}  "
             f"{'yes' if a.has_homopolymer else 'no':>7} "
             f"{'yes' if a.is_low_complexity else 'no':>6} "
             f"{'yes' if a.is_palindrome else 'no':>6} "

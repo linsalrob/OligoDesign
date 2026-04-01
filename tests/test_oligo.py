@@ -182,6 +182,18 @@ class TestAnalyseOligo:
         result = analyse_oligo(DNA("AACGTT"), name="t")
         assert result.base_composition == {"A": 2, "C": 1, "G": 1, "T": 2}
 
+    def test_entropy_present(self) -> None:
+        result = analyse_oligo(DNA("ACGT"), name="t")
+        assert isinstance(result.entropy, float)
+
+    def test_entropy_max_for_equal_bases(self) -> None:
+        result = analyse_oligo(DNA("ACGT"), name="t")
+        assert result.entropy == 2.0
+
+    def test_entropy_zero_for_homopolymer(self) -> None:
+        result = analyse_oligo(DNA("AAAA"), name="t")
+        assert result.entropy == 0.0
+
 
 # ---------------------------------------------------------------------------
 # OligoAnalysis serialisation
@@ -197,8 +209,13 @@ class TestOligoAnalysisSerialization:
 
     def test_to_dict_has_expected_keys(self) -> None:
         d = self._make().to_dict()
-        for key in ("name", "sequence", "length", "gc_content", "is_palindrome"):
+        for key in ("name", "sequence", "length", "gc_content", "entropy", "is_palindrome"):
             assert key in d
+
+    def test_to_dict_entropy_value(self) -> None:
+        d = self._make().to_dict()
+        assert isinstance(d["entropy"], float)
+        assert 0.0 <= d["entropy"] <= 2.0
 
     def test_to_tsv_row_is_list_of_strings(self) -> None:
         row = self._make().to_tsv_row()
@@ -251,7 +268,7 @@ class TestWriteOutputs:
         write_json(self._analyses(), path)
         data = json.loads(open(path).read())
         for item in data:
-            for key in ("name", "sequence", "length", "gc_content"):
+            for key in ("name", "sequence", "length", "gc_content", "entropy"):
                 assert key in item
 
     def test_write_tsv_creates_file(self, tmp_path) -> None:
