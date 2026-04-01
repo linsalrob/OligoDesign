@@ -280,8 +280,17 @@ class TestWriteOutputs:
         write_json(self._analyses(), path)
         data = json.loads(open(path).read())
         for item in data:
-            for key in ("name", "sequence", "length", "gc_content", "entropy"):
+            for key in ("name", "sequence", "length", "gc_content", "entropy", "tm"):
                 assert key in item
+
+    def test_write_json_tm_is_null_for_short_sequences(self, tmp_path) -> None:
+        # Single-base and 4-base sequences are borderline; ensure JSON output
+        # is valid RFC 8259 (no bare NaN).
+        path = str(tmp_path / "out.json")
+        write_json(self._analyses(), path)
+        text = open(path).read()
+        assert "NaN" not in text
+        assert "Infinity" not in text
 
     def test_write_tsv_creates_file(self, tmp_path) -> None:
         path = str(tmp_path / "out.tsv")

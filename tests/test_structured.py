@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import math
 import os
 import random
 
@@ -236,7 +235,6 @@ class TestStructuredOligoSerialization:
     def test_to_dict_tm_is_float(self) -> None:
         d = generate_palindromic_motif(half_length=10, rng=random.Random(1)).to_dict()
         assert isinstance(d["tm"], float)
-        assert not math.isnan(d["tm"])
 
     def test_tm_realistic_range_for_20bp(self) -> None:
         oligo = generate_palindromic_motif(half_length=10, rng=random.Random(1))

@@ -190,18 +190,16 @@ class StructuredOligo:
         return _htr(DNA(acgt_only))
 
     @property
-    def tm(self) -> float:
+    def tm(self) -> float | None:
         """Estimated melting temperature in °C.
 
         Computed from the ACGT-only bases of the sequence (``N`` spacer
         bases are ignored), using the nearest-neighbor model at 50 mM
-        Na⁺ and 250 nM oligo concentration.  Returns ``float('nan')``
-        if the ACGT-only portion is shorter than 2 bases.
+        Na⁺ and 250 nM oligo concentration.  Returns ``None`` if the
+        ACGT-only portion is shorter than 2 bases.
         """
         acgt_only = "".join(b for b in self.sequence if b in _ALL_BASES)
-        if len(acgt_only) < 2:
-            return float("nan")
-        return DNA(acgt_only).melting_temperature()
+        return DNA(acgt_only).melting_temperature() if len(acgt_only) >= 2 else None
 
     # ------------------------------------------------------------------
     # WritableOligo protocol implementation
@@ -244,7 +242,7 @@ class StructuredOligo:
             str(self.inner_is_palindrome),
             f"{self.gc_content:.4f}",
             f"{self.entropy:.4f}",
-            f"{self.tm:.2f}",
+            f"{self.tm:.2f}" if self.tm is not None else "",
             str(self.has_hairpin),
             str(self.has_tandem_repeat),
         ]

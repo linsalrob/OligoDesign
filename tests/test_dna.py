@@ -472,13 +472,11 @@ class TestHairpin:
 
 
 class TestMeltingTemperature:
-    def test_empty_sequence_returns_nan(self) -> None:
-        import math
-        assert math.isnan(DNA("").melting_temperature())
+    def test_empty_sequence_returns_none(self) -> None:
+        assert DNA("").melting_temperature() is None
 
-    def test_single_base_returns_nan(self) -> None:
-        import math
-        assert math.isnan(DNA("A").melting_temperature())
+    def test_single_base_returns_none(self) -> None:
+        assert DNA("A").melting_temperature() is None
 
     def test_returns_float(self) -> None:
         assert isinstance(DNA("ACGTACGTACGT").melting_temperature(), float)
@@ -530,7 +528,17 @@ class TestMeltingTemperature:
         assert abs(tm - 46.92) < 0.1
 
     def test_known_value_gc_rich_20mer(self) -> None:
-        # Pre-computed value for self-complementary GCATGCATGCATGCATGCAT
+        # Pre-computed value for non-self-complementary GCATGCATGCATGCATGCAT
         dna = DNA("GCATGCATGCATGCATGCAT")
+        assert dna.is_self_complementary() is False
         tm = dna.melting_temperature()
         assert abs(tm - 51.15) < 0.1
+
+    def test_symmetry_correction_lowers_tm_for_palindromes(self) -> None:
+        # ACGT is self-complementary; the SantaLucia symmetry correction of
+        # -1.4 cal/mol·K applied to ΔS should produce a lower Tm than the
+        # uncorrected value.  Verify the pre-computed Tm (≈-55.77°C) against
+        # the expected value to confirm the correction is applied.
+        tm = DNA("ACGT").melting_temperature()
+        assert tm is not None
+        assert abs(tm - (-55.77)) < 0.1, f"Expected ≈-55.77, got {tm:.2f}"

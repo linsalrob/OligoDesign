@@ -560,7 +560,7 @@ class DNA:
         self,
         na_conc: float = 0.05,
         oligo_conc: float = 250e-9,
-    ) -> float:
+    ) -> float | None:
         """Return the estimated melting temperature (*Tm*) in °C.
 
         Uses the nearest-neighbor (NN) thermodynamic model with the unified
@@ -578,10 +578,10 @@ class DNA:
 
         Returns
         -------
-        float
-            Estimated *Tm* in °C.  Returns ``float('nan')`` for sequences
-            shorter than 2 bases or sequences composed entirely of
-            non-ACGT characters.
+        float or None
+            Estimated *Tm* in °C.  Returns ``None`` for sequences shorter
+            than 2 bases or sequences composed entirely of non-ACGT
+            characters.
 
         Notes
         -----
@@ -593,7 +593,8 @@ class DNA:
         nearest-neighbor stacking terms plus initiation terms for both
         terminal base pairs, *R* = 1.987 cal/(mol·K), and *CT* is the
         total strand concentration in molar.  For self-complementary
-        sequences ``CT / 4`` is replaced by ``CT``.
+        sequences ``CT / 4`` is replaced by ``CT``, and a symmetry
+        entropy correction of ``ΔS_sym = −1.4 cal/mol·K`` is applied.
 
         A monovalent-salt correction is then applied::
 
@@ -619,7 +620,7 @@ class DNA:
         acgt = "".join(b for b in seq if b in VALID_BASES)
         n = len(acgt)
         if n < 2:
-            return float("nan")
+            return None
 
         dh: float = 0.0  # kcal/mol
         ds: float = 0.0  # cal/mol·K
@@ -644,8 +645,13 @@ class DNA:
         # Convert ΔH from kcal/mol to cal/mol
         dh_cal = dh * 1000.0
 
-        # Choose strand-concentration factor based on self-complementarity
+        # Detect self-complementarity and apply the SantaLucia symmetry
+        # entropy correction (ΔS_sym = -1.4 cal/mol·K) for palindromic
+        # sequences.  The concentration factor is also CT (not CT/4) for
+        # self-complementary strands.
         is_sc = acgt == acgt[::-1].translate(_COMPLEMENT_TABLE)
+        if is_sc:
+            ds += -1.4  # symmetry entropy correction
         ct_factor = oligo_conc if is_sc else oligo_conc / 4.0
 
         # Tm at 1 M Na⁺ (Kelvin), then convert to Celsius
