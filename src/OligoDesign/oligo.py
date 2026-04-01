@@ -5,9 +5,31 @@ from __future__ import annotations
 import json
 import random
 from dataclasses import asdict, dataclass, field
-from typing import Optional
+from typing import Optional, Protocol
 
 from .dna import DNA
+
+
+# ---------------------------------------------------------------------------
+# Shared output protocol
+# ---------------------------------------------------------------------------
+
+
+class WritableOligo(Protocol):
+    """Protocol for oligo objects that can be written to FASTA, JSON, and TSV.
+
+    Any class that exposes ``name``, ``sequence``, ``to_dict()``, and
+    ``to_tsv_row()`` — plus a ``tsv_headers()`` static/class method —
+    satisfies this protocol and can be passed to :func:`write_fasta`,
+    :func:`write_json`, and :func:`write_tsv`.
+    """
+
+    name: str
+    sequence: str
+
+    def to_dict(self) -> dict: ...
+
+    def to_tsv_row(self) -> list[str]: ...
 
 # ---------------------------------------------------------------------------
 # Random oligo generation
@@ -307,13 +329,17 @@ def analyse_oligo(
 # ---------------------------------------------------------------------------
 
 
-def write_fasta(analyses: list[OligoAnalysis], path: str) -> None:
+def write_fasta(analyses: list[WritableOligo], path: str) -> None:
     """Write oligo sequences to *path* in FASTA format.
+
+    Accepts any list of objects that satisfy :class:`WritableOligo`
+    (e.g. :class:`OligoAnalysis` or
+    :class:`~OligoDesign.structured.StructuredOligo`).
 
     Parameters
     ----------
     analyses:
-        List of :class:`OligoAnalysis` objects.
+        List of oligo objects with ``name`` and ``sequence`` attributes.
     path:
         Output file path.
     """
@@ -322,13 +348,15 @@ def write_fasta(analyses: list[OligoAnalysis], path: str) -> None:
             fh.write(f">{a.name}\n{a.sequence}\n")
 
 
-def write_json(analyses: list[OligoAnalysis], path: str) -> None:
+def write_json(analyses: list[WritableOligo], path: str) -> None:
     """Write the full analysis data structure to *path* as JSON.
+
+    Accepts any list of objects that satisfy :class:`WritableOligo`.
 
     Parameters
     ----------
     analyses:
-        List of :class:`OligoAnalysis` objects.
+        List of oligo objects with a ``to_dict()`` method.
     path:
         Output file path.
     """
@@ -338,17 +366,23 @@ def write_json(analyses: list[OligoAnalysis], path: str) -> None:
         fh.write("\n")
 
 
-def write_tsv(analyses: list[OligoAnalysis], path: str) -> None:
+def write_tsv(analyses: list[WritableOligo], path: str) -> None:
     """Write per-oligo analysis to *path* as a tab-separated file.
+
+    Accepts any list of objects that satisfy :class:`WritableOligo`.
+    Column headers are retrieved from ``type(analyses[0]).tsv_headers()``,
+    so the correct header row is used automatically for each oligo type.
 
     Parameters
     ----------
     analyses:
-        List of :class:`OligoAnalysis` objects.
+        List of oligo objects with ``to_tsv_row()`` and a class-level
+        ``tsv_headers()`` method.
     path:
         Output file path.
     """
     with open(path, "w") as fh:
-        fh.write("\t".join(OligoAnalysis.tsv_headers()) + "\n")
+        if analyses:
+            fh.write("\t".join(type(analyses[0]).tsv_headers()) + "\n")
         for a in analyses:
             fh.write("\t".join(a.to_tsv_row()) + "\n")
