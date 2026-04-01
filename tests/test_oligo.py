@@ -1,0 +1,357 @@
+"""Tests for OligoDesign.oligo and OligoDesign.cli."""
+
+from __future__ import annotations
+
+import json
+import os
+import random
+
+import pytest
+
+from OligoDesign.dna import DNA
+from OligoDesign.oligo import (
+    OligoAnalysis,
+    analyse_oligo,
+    find_complementary_pairs,
+    has_tandem_repeat,
+    random_oligo,
+    write_fasta,
+    write_json,
+    write_tsv,
+)
+from OligoDesign.cli import main
+
+
+# ---------------------------------------------------------------------------
+# random_oligo
+# ---------------------------------------------------------------------------
+
+
+class TestRandomOligo:
+    def test_default_length_is_40(self) -> None:
+        oligo = random_oligo(rng=random.Random(1))
+        assert len(oligo) == 40
+
+    def test_custom_length(self) -> None:
+        oligo = random_oligo(length=20, rng=random.Random(1))
+        assert len(oligo) == 20
+
+    def test_zero_length(self) -> None:
+        oligo = random_oligo(length=0, rng=random.Random(1))
+        assert len(oligo) == 0
+
+    def test_returns_dna_instance(self) -> None:
+        oligo = random_oligo(rng=random.Random(1))
+        assert isinstance(oligo, DNA)
+
+    def test_only_valid_bases(self) -> None:
+        oligo = random_oligo(length=100, rng=random.Random(42))
+        assert set(str(oligo)).issubset({"A", "C", "G", "T"})
+
+    def test_reproducible_with_seed(self) -> None:
+        a = random_oligo(rng=random.Random(99))
+        b = random_oligo(rng=random.Random(99))
+        assert str(a) == str(b)
+
+    def test_different_seeds_differ(self) -> None:
+        a = random_oligo(length=100, rng=random.Random(1))
+        b = random_oligo(length=100, rng=random.Random(2))
+        assert str(a) != str(b)
+
+    def test_negative_length_raises(self) -> None:
+        with pytest.raises(ValueError):
+            random_oligo(length=-1)
+
+
+# ---------------------------------------------------------------------------
+# has_tandem_repeat
+# ---------------------------------------------------------------------------
+
+
+class TestHasTandemRepeat:
+    def test_dinucleotide_repeat_detected(self) -> None:
+        # ATATAT = AT * 3
+        assert has_tandem_repeat(DNA("ATATAT")) is True
+
+    def test_trinucleotide_repeat_detected(self) -> None:
+        # ATCATCATC = ATC * 3
+        assert has_tandem_repeat(DNA("ATCATCATC")) is True
+
+    def test_no_tandem_repeat(self) -> None:
+        # ACGTACGT only 2 copies of ACGT, below min_count=3
+        assert has_tandem_repeat(DNA("ACGTACGT")) is False
+
+    def test_short_sequence_no_repeat(self) -> None:
+        assert has_tandem_repeat(DNA("ACGT")) is False
+
+    def test_repeat_embedded_in_longer_sequence(self) -> None:
+        # GGG + ATCATCATC + TTT
+        assert has_tandem_repeat(DNA("GGGATCATCATCTTT")) is True
+
+    def test_min_count_param(self) -> None:
+        # ACGTACGT is 2 copies; should be found with min_count=2
+        assert has_tandem_repeat(DNA("ACGTACGT"), min_unit=4, max_unit=4, min_count=2) is True
+
+    def test_exact_minimum_copies(self) -> None:
+        # ATATAT has exactly 3 copies of AT (the default min_count)
+        assert has_tandem_repeat(DNA("ATATAT"), min_unit=2, max_unit=2, min_count=3) is True
+
+
+# ---------------------------------------------------------------------------
+# find_complementary_pairs
+# ---------------------------------------------------------------------------
+
+
+class TestFindComplementaryPairs:
+    def test_perfect_complement_detected(self) -> None:
+        # oligo1 is the reverse complement of oligo2 (20 bp overlap)
+        seq = "ATCGATCGATCGATCGATCG"
+        rc = str(DNA(seq).reverse_complement())
+        oligos = [DNA(seq), DNA(rc)]
+        names = ["o1", "o2"]
+        pairs = find_complementary_pairs(oligos, names, min_overlap=10)
+        assert "o2" in pairs["o1"]
+        assert "o1" in pairs["o2"]
+
+    def test_unrelated_oligos_no_pair(self) -> None:
+        # Use short sequences below min_overlap so complementarity window fails
+        oligos = [DNA("ACGTACGT"), DNA("TTTTTTTT")]
+        names = ["a", "b"]
+        pairs = find_complementary_pairs(oligos, names, min_overlap=10)
+        assert pairs["a"] == []
+        assert pairs["b"] == []
+
+    def test_returns_dict_with_all_names(self) -> None:
+        oligos = [DNA("ACGT"), DNA("TTTT"), DNA("GGGG")]
+        names = ["x", "y", "z"]
+        pairs = find_complementary_pairs(oligos, names, min_overlap=1)
+        assert set(pairs.keys()) == {"x", "y", "z"}
+
+
+# ---------------------------------------------------------------------------
+# analyse_oligo
+# ---------------------------------------------------------------------------
+
+
+class TestAnalyseOligo:
+    def test_returns_oligo_analysis(self) -> None:
+        result = analyse_oligo(DNA("ACGT"), name="test")
+        assert isinstance(result, OligoAnalysis)
+
+    def test_name_propagated(self) -> None:
+        result = analyse_oligo(DNA("ACGT"), name="my_oligo")
+        assert result.name == "my_oligo"
+
+    def test_sequence_propagated(self) -> None:
+        result = analyse_oligo(DNA("acgt"), name="t")
+        assert result.sequence == "ACGT"
+
+    def test_length_correct(self) -> None:
+        result = analyse_oligo(DNA("ACGTACGT"), name="t")
+        assert result.length == 8
+
+    def test_gc_content_correct(self) -> None:
+        result = analyse_oligo(DNA("ACGT"), name="t")
+        assert result.gc_content == 0.5
+
+    def test_palindrome_detected(self) -> None:
+        result = analyse_oligo(DNA("GAATTC"), name="ecori")
+        assert result.is_palindrome is True
+
+    def test_non_palindrome(self) -> None:
+        result = analyse_oligo(DNA("AACC"), name="t")
+        assert result.is_palindrome is False
+
+    def test_homopolymer_detected(self) -> None:
+        result = analyse_oligo(DNA("ACAAAAGT"), name="t")
+        assert result.has_homopolymer is True
+
+    def test_hairpin_detected(self) -> None:
+        result = analyse_oligo(DNA("AAAACCCTTTT"), name="t")
+        assert result.has_hairpin is True
+
+    def test_tandem_repeat_detected(self) -> None:
+        result = analyse_oligo(DNA("ATATAT"), name="t")
+        assert result.has_tandem_repeat is True
+
+    def test_complementary_to_empty_by_default(self) -> None:
+        result = analyse_oligo(DNA("ACGT"), name="t")
+        assert result.complementary_to == []
+
+    def test_base_composition_correct(self) -> None:
+        result = analyse_oligo(DNA("AACGTT"), name="t")
+        assert result.base_composition == {"A": 2, "C": 1, "G": 1, "T": 2}
+
+
+# ---------------------------------------------------------------------------
+# OligoAnalysis serialisation
+# ---------------------------------------------------------------------------
+
+
+class TestOligoAnalysisSerialization:
+    def _make(self) -> OligoAnalysis:
+        return analyse_oligo(DNA("GAATTC"), name="ecori")
+
+    def test_to_dict_is_dict(self) -> None:
+        assert isinstance(self._make().to_dict(), dict)
+
+    def test_to_dict_has_expected_keys(self) -> None:
+        d = self._make().to_dict()
+        for key in ("name", "sequence", "length", "gc_content", "is_palindrome"):
+            assert key in d
+
+    def test_to_tsv_row_is_list_of_strings(self) -> None:
+        row = self._make().to_tsv_row()
+        assert isinstance(row, list)
+        assert all(isinstance(v, str) for v in row)
+
+    def test_tsv_headers_length_matches_row_length(self) -> None:
+        a = self._make()
+        assert len(OligoAnalysis.tsv_headers()) == len(a.to_tsv_row())
+
+
+# ---------------------------------------------------------------------------
+# write_fasta / write_json / write_tsv
+# ---------------------------------------------------------------------------
+
+
+class TestWriteOutputs:
+    def _analyses(self) -> list[OligoAnalysis]:
+        return [
+            analyse_oligo(DNA("ACGT"), name="o1"),
+            analyse_oligo(DNA("TTTT"), name="o2"),
+        ]
+
+    def test_write_fasta_creates_file(self, tmp_path) -> None:
+        path = str(tmp_path / "out.fa")
+        write_fasta(self._analyses(), path)
+        assert os.path.exists(path)
+
+    def test_write_fasta_content(self, tmp_path) -> None:
+        path = str(tmp_path / "out.fa")
+        write_fasta(self._analyses(), path)
+        text = open(path).read()
+        assert ">o1\nACGT\n" in text
+        assert ">o2\nTTTT\n" in text
+
+    def test_write_json_creates_file(self, tmp_path) -> None:
+        path = str(tmp_path / "out.json")
+        write_json(self._analyses(), path)
+        assert os.path.exists(path)
+
+    def test_write_json_is_valid_json(self, tmp_path) -> None:
+        path = str(tmp_path / "out.json")
+        write_json(self._analyses(), path)
+        data = json.loads(open(path).read())
+        assert isinstance(data, list)
+        assert len(data) == 2
+
+    def test_write_json_has_required_fields(self, tmp_path) -> None:
+        path = str(tmp_path / "out.json")
+        write_json(self._analyses(), path)
+        data = json.loads(open(path).read())
+        for item in data:
+            for key in ("name", "sequence", "length", "gc_content"):
+                assert key in item
+
+    def test_write_tsv_creates_file(self, tmp_path) -> None:
+        path = str(tmp_path / "out.tsv")
+        write_tsv(self._analyses(), path)
+        assert os.path.exists(path)
+
+    def test_write_tsv_has_header(self, tmp_path) -> None:
+        path = str(tmp_path / "out.tsv")
+        write_tsv(self._analyses(), path)
+        lines = open(path).readlines()
+        assert lines[0].strip() == "\t".join(OligoAnalysis.tsv_headers())
+
+    def test_write_tsv_row_count(self, tmp_path) -> None:
+        path = str(tmp_path / "out.tsv")
+        write_tsv(self._analyses(), path)
+        lines = open(path).readlines()
+        # header + 2 data rows
+        assert len(lines) == 3
+
+    def test_write_tsv_tab_separated(self, tmp_path) -> None:
+        path = str(tmp_path / "out.tsv")
+        write_tsv(self._analyses(), path)
+        lines = open(path).readlines()
+        assert "\t" in lines[1]
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+
+class TestCLI:
+    def test_default_run_exits_zero(self) -> None:
+        assert main(["--quiet", "--seed", "1"]) == 0
+
+    def test_custom_count_and_length(self) -> None:
+        assert main(["--count", "5", "--length", "20", "--quiet", "--seed", "1"]) == 0
+
+    def test_fasta_output(self, tmp_path) -> None:
+        fasta = str(tmp_path / "out.fa")
+        main(["--count", "3", "--length", "20", "--fasta", fasta, "--quiet", "--seed", "1"])
+        lines = open(fasta).readlines()
+        header_lines = [l for l in lines if l.startswith(">")]
+        assert len(header_lines) == 3
+
+    def test_json_output(self, tmp_path) -> None:
+        path = str(tmp_path / "out.json")
+        main(["--count", "3", "--length", "20", "--json", path, "--quiet", "--seed", "1"])
+        data = json.loads(open(path).read())
+        assert len(data) == 3
+
+    def test_tsv_output(self, tmp_path) -> None:
+        path = str(tmp_path / "out.tsv")
+        main(["--count", "3", "--length", "20", "--tsv", path, "--quiet", "--seed", "1"])
+        lines = open(path).readlines()
+        assert len(lines) == 4  # header + 3 rows
+
+    def test_all_outputs_together(self, tmp_path) -> None:
+        fasta = str(tmp_path / "out.fa")
+        jsn = str(tmp_path / "out.json")
+        tsv = str(tmp_path / "out.tsv")
+        main([
+            "--count", "5", "--length", "30",
+            "--fasta", fasta, "--json", jsn, "--tsv", tsv,
+            "--quiet", "--seed", "42",
+        ])
+        assert os.path.exists(fasta)
+        assert os.path.exists(jsn)
+        assert os.path.exists(tsv)
+
+    def test_reproducible_with_seed(self, tmp_path) -> None:
+        f1 = str(tmp_path / "a.fa")
+        f2 = str(tmp_path / "b.fa")
+        main(["--count", "5", "--fasta", f1, "--quiet", "--seed", "7"])
+        main(["--count", "5", "--fasta", f2, "--quiet", "--seed", "7"])
+        assert open(f1).read() == open(f2).read()
+
+    def test_invalid_count_exits_nonzero(self) -> None:
+        with pytest.raises(SystemExit) as exc:
+            main(["--count", "0"])
+        assert exc.value.code != 0
+
+    def test_invalid_length_exits_nonzero(self) -> None:
+        with pytest.raises(SystemExit) as exc:
+            main(["--length", "0"])
+        assert exc.value.code != 0
+
+    def test_stdout_summary_printed(self, capsys) -> None:
+        main(["--count", "2", "--length", "20", "--seed", "1"])
+        captured = capsys.readouterr()
+        assert "Generated 2 oligos" in captured.out
+
+    def test_prefix_used_in_names(self, tmp_path) -> None:
+        path = str(tmp_path / "out.json")
+        main([
+            "--count", "2", "--length", "10",
+            "--prefix", "myoligo",
+            "--json", path,
+            "--quiet", "--seed", "1",
+        ])
+        data = json.loads(open(path).read())
+        assert all(item["name"].startswith("myoligo") for item in data)
