@@ -29,7 +29,7 @@ Focus development in this order:
 Assume the repository will evolve into a normal Python package layout. Until a `pyproject.toml` exists, do not invent unnecessary packaging complexity, but write code that will fit naturally into a standard package structure.
 
 Preferred layout:
-- `OligoDesign/` for package code
+- `OligoDesign/src` for package code
 - `tests/` for `pytest` tests
 - `README.md` for overview and examples
 - `.github/` for automation and Copilot instructions
