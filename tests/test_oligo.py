@@ -15,6 +15,7 @@ from OligoDesign.oligo import (
     find_complementary_pairs,
     has_tandem_repeat,
     random_oligo,
+    read_json,
     write_fasta,
     write_json,
     write_tsv,
@@ -424,3 +425,186 @@ class TestCLI:
         ])
         data = json.loads(open(path).read())
         assert all(item["name"].startswith("myoligo") for item in data)
+
+
+# ---------------------------------------------------------------------------
+# read_json
+# ---------------------------------------------------------------------------
+
+
+class TestReadJson:
+    def _write_oligo_analyses(self, tmp_path) -> tuple[list[OligoAnalysis], str]:
+        analyses = [
+            analyse_oligo(DNA("ACGT"), name="o1"),
+            analyse_oligo(DNA("TTTTAAAA"), name="o2"),
+        ]
+        path = str(tmp_path / "out.json")
+        write_json(analyses, path)
+        return analyses, path
+
+    def test_returns_list(self, tmp_path) -> None:
+        _, path = self._write_oligo_analyses(tmp_path)
+        result = read_json(path)
+        assert isinstance(result, list)
+
+    def test_correct_count(self, tmp_path) -> None:
+        analyses, path = self._write_oligo_analyses(tmp_path)
+        result = read_json(path)
+        assert len(result) == len(analyses)
+
+    def test_returns_oligo_analysis_instances(self, tmp_path) -> None:
+        _, path = self._write_oligo_analyses(tmp_path)
+        result = read_json(path)
+        for obj in result:
+            assert isinstance(obj, OligoAnalysis)
+
+    def test_sequence_preserved(self, tmp_path) -> None:
+        analyses, path = self._write_oligo_analyses(tmp_path)
+        result = read_json(path)
+        assert result[0].sequence == analyses[0].sequence
+        assert result[1].sequence == analyses[1].sequence
+
+    def test_name_preserved(self, tmp_path) -> None:
+        analyses, path = self._write_oligo_analyses(tmp_path)
+        result = read_json(path)
+        assert result[0].name == "o1"
+        assert result[1].name == "o2"
+
+    def test_gc_content_preserved(self, tmp_path) -> None:
+        analyses, path = self._write_oligo_analyses(tmp_path)
+        result = read_json(path)
+        assert result[0].gc_content == pytest.approx(analyses[0].gc_content)
+
+    def test_empty_json_returns_empty_list(self, tmp_path) -> None:
+        path = str(tmp_path / "empty.json")
+        with open(path, "w") as fh:
+            fh.write("[]\n")
+        assert read_json(path) == []
+
+    def test_reads_structured_oligos(self, tmp_path) -> None:
+        from OligoDesign.structured import StructuredOligo, generate_palindromic_motif
+
+        oligos = [generate_palindromic_motif(rng=random.Random(i)) for i in range(3)]
+        for i, o in enumerate(oligos):
+            o.name = f"p{i}"
+        path = str(tmp_path / "structured.json")
+        write_json(oligos, path)
+        result = read_json(path)
+        assert len(result) == 3
+        for obj in result:
+            assert isinstance(obj, StructuredOligo)
+
+    def test_structured_sequence_preserved(self, tmp_path) -> None:
+        from OligoDesign.structured import generate_palindromic_motif
+
+        oligos = [generate_palindromic_motif(rng=random.Random(0))]
+        oligos[0].name = "p0"
+        path = str(tmp_path / "s.json")
+        write_json(oligos, path)
+        result = read_json(path)
+        assert result[0].sequence == oligos[0].sequence
+
+    def test_structured_oligo_type_preserved(self, tmp_path) -> None:
+        from OligoDesign.structured import generate_inverted_repeat
+
+        oligos = [generate_inverted_repeat(rng=random.Random(0))]
+        path = str(tmp_path / "ir.json")
+        write_json(oligos, path)
+        result = read_json(path)
+        assert result[0].oligo_type == "inverted_repeat"
+
+    def test_invalid_json_raises(self, tmp_path) -> None:
+        path = str(tmp_path / "bad.json")
+        with open(path, "w") as fh:
+            fh.write("not json at all")
+        with pytest.raises(json.JSONDecodeError):
+            read_json(path)
+
+    def test_non_array_json_raises(self, tmp_path) -> None:
+        path = str(tmp_path / "obj.json")
+        with open(path, "w") as fh:
+            json.dump({"key": "value"}, fh)
+        with pytest.raises(ValueError, match="Expected a JSON array"):
+            read_json(path)
+
+
+# ---------------------------------------------------------------------------
+# sequence_logo
+# ---------------------------------------------------------------------------
+
+
+class TestSequenceLogo:
+    def _oligos(self) -> list[OligoAnalysis]:
+        return [
+            analyse_oligo(DNA("ACGTACGT"), name=f"o{i}") for i in range(5)
+        ]
+
+    def test_creates_png_file(self, tmp_path) -> None:
+        from OligoDesign.sequence_logo import sequence_logo
+
+        path = str(tmp_path / "logo.png")
+        sequence_logo(self._oligos(), path)
+        assert os.path.exists(path)
+
+    def test_png_file_non_empty(self, tmp_path) -> None:
+        from OligoDesign.sequence_logo import sequence_logo
+
+        path = str(tmp_path / "logo.png")
+        sequence_logo(self._oligos(), path)
+        assert os.path.getsize(path) > 0
+
+    def test_reads_from_json_path(self, tmp_path) -> None:
+        from OligoDesign.sequence_logo import sequence_logo
+
+        json_path = str(tmp_path / "oligos.json")
+        png_path = str(tmp_path / "logo.png")
+        write_json(self._oligos(), json_path)
+        sequence_logo(json_path, png_path)
+        assert os.path.exists(png_path)
+
+    def test_probability_logo_type(self, tmp_path) -> None:
+        from OligoDesign.sequence_logo import sequence_logo
+
+        path = str(tmp_path / "logo_prob.png")
+        sequence_logo(self._oligos(), path, logo_type="probability")
+        assert os.path.exists(path)
+
+    def test_information_logo_type(self, tmp_path) -> None:
+        from OligoDesign.sequence_logo import sequence_logo
+
+        path = str(tmp_path / "logo_info.png")
+        sequence_logo(self._oligos(), path, logo_type="information")
+        assert os.path.exists(path)
+
+    def test_invalid_logo_type_raises(self, tmp_path) -> None:
+        from OligoDesign.sequence_logo import sequence_logo
+
+        path = str(tmp_path / "logo.png")
+        with pytest.raises(ValueError, match="logo_type"):
+            sequence_logo(self._oligos(), path, logo_type="invalid")
+
+    def test_empty_list_raises(self, tmp_path) -> None:
+        from OligoDesign.sequence_logo import sequence_logo
+
+        path = str(tmp_path / "logo.png")
+        with pytest.raises(ValueError):
+            sequence_logo([], path)
+
+    def test_object_without_sequence_raises(self, tmp_path) -> None:
+        from OligoDesign.sequence_logo import sequence_logo
+
+        path = str(tmp_path / "logo.png")
+        with pytest.raises(ValueError, match="sequence"):
+            sequence_logo([object()], path)
+
+    def test_structured_oligos_source(self, tmp_path) -> None:
+        from OligoDesign.sequence_logo import sequence_logo
+        from OligoDesign.structured import generate_palindromic_motif
+
+        oligos = [
+            generate_palindromic_motif(half_length=8, rng=random.Random(i))
+            for i in range(5)
+        ]
+        path = str(tmp_path / "logo_structured.png")
+        sequence_logo(oligos, path)
+        assert os.path.exists(path)

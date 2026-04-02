@@ -8,10 +8,12 @@ from .oligo import (
     find_complementary_pairs,
     has_tandem_repeat,
     random_oligo,
+    read_json,
     write_fasta,
     write_json,
     write_tsv,
 )
+from .sequence_logo import sequence_logo
 from .structured import (
     StructuredOligo,
     generate_at_rich_palindrome,
@@ -37,4 +39,8 @@ __all__ = [
     "write_fasta",
     "write_json",
     "write_tsv",
+    # Input helpers
+    "read_json",
+    # Visualisation
+    "sequence_logo",
 ]
