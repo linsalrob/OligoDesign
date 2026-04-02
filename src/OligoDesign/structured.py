@@ -64,6 +64,11 @@ _AT_BASES = "AT"
 # Recommended spacer lengths for structured oligos
 SPACER_LENGTHS: tuple[int, ...] = (0, 2, 3, 4, 5, 6)
 
+# Complement table used by the hairpin scanner (ACGT only; N has no mapping)
+_HAIRPIN_COMPLEMENT_TABLE: dict[int, int] = str.maketrans("ACGT", "TGCA")
+# Frozenset of unambiguous bases for stem validation
+_ACGT_SET: frozenset[str] = frozenset("ACGT")
+
 
 def _random_seq(length: int, bases: str, rng: random.Random) -> str:
     """Return a random sequence of *length* drawn from *bases*."""
@@ -169,15 +174,47 @@ class StructuredOligo:
 
     @property
     def has_hairpin(self) -> bool:
-        """``True`` if the ACGT-only portion of the sequence contains a hairpin.
+        """``True`` if the sequence contains a potential hairpin structure.
 
-        ``N`` spacer bases are stripped before running the heuristic so that
-        AT-rich palindromes with N spacers are handled correctly.
+        Performs a local hairpin scan that preserves the original sequence
+        positions and treats ``N`` spacer bases as non-pairing loop bases.
+        Only A/T/C/G complement pairing is permitted in stems; any ``N``
+        base in a candidate stem position disqualifies that stem candidate
+        so it is not reported as a hairpin.  ``N`` bases are freely allowed
+        in loop positions.
+
+        Default parameters: ``min_stem=4``, ``min_loop=3``, ``max_loop=8``.
+
+        Notes on ambiguity handling
+        ---------------------------
+        - ``N`` bases may occupy any loop position without restriction.
+        - ``N`` in a stem position prevents a stem base-pair from forming,
+          so a candidate stem that contains any ``N`` is rejected.
+        - This differs from the old approach (which stripped ``N`` before
+          scanning), because here the original positional context is
+          preserved: ``N`` spacer bases contribute to the loop length
+          without collapsing the sequence geometry.
         """
-        acgt_only = "".join(b for b in self.sequence if b in _ALL_BASES)
-        if len(acgt_only) < 11:  # too short for a meaningful hairpin
-            return False
-        return DNA(acgt_only).has_hairpin()
+        seq = self.sequence
+        n = len(seq)
+        min_stem, min_loop, max_loop = 4, 3, 8
+        for stem_len in range(min_stem, n // 2 + 1):
+            for loop_len in range(min_loop, max_loop + 1):
+                required = 2 * stem_len + loop_len
+                if required > n:
+                    break
+                for i in range(n - required + 1):
+                    stem5 = seq[i : i + stem_len]
+                    stem3 = seq[i + stem_len + loop_len : i + required]
+                    # Reject if either stem contains non-ACGT bases (e.g. N)
+                    if not frozenset(stem5).issubset(_ACGT_SET):
+                        continue
+                    if not frozenset(stem3).issubset(_ACGT_SET):
+                        continue
+                    rc_stem5 = stem5[::-1].translate(_HAIRPIN_COMPLEMENT_TABLE)
+                    if stem3 == rc_stem5:
+                        return True
+        return False
 
     @property
     def has_tandem_repeat(self) -> bool:
@@ -306,7 +343,8 @@ def generate_palindromic_motif(
     Raises
     ------
     ValueError
-        If *half_length* < 1 or *spacer_length* < 0.
+        If *half_length* < 1 or *spacer_length* is not in
+        :data:`SPACER_LENGTHS` (``(0, 2, 3, 4, 5, 6)``).
 
     Examples
     --------
@@ -319,8 +357,10 @@ def generate_palindromic_motif(
     """
     if half_length < 1:
         raise ValueError(f"half_length must be >= 1, got {half_length}")
-    if spacer_length < 0:
-        raise ValueError(f"spacer_length must be >= 0, got {spacer_length}")
+    if spacer_length not in SPACER_LENGTHS:
+        raise ValueError(
+            f"spacer_length must be one of {SPACER_LENGTHS}, got {spacer_length}"
+        )
 
     if rng is None:
         rng = random.Random()
@@ -378,7 +418,8 @@ def generate_inverted_repeat(
     ------
     ValueError
         If *inner_half_length* < 1, *outer_arm_length* < 1, or
-        *inner_spacer_length* < 0.
+        *inner_spacer_length* is not in :data:`SPACER_LENGTHS`
+        (``(0, 2, 3, 4, 5, 6)``).
 
     Examples
     --------
@@ -393,8 +434,10 @@ def generate_inverted_repeat(
         raise ValueError(f"inner_half_length must be >= 1, got {inner_half_length}")
     if outer_arm_length < 1:
         raise ValueError(f"outer_arm_length must be >= 1, got {outer_arm_length}")
-    if inner_spacer_length < 0:
-        raise ValueError(f"inner_spacer_length must be >= 0, got {inner_spacer_length}")
+    if inner_spacer_length not in SPACER_LENGTHS:
+        raise ValueError(
+            f"inner_spacer_length must be one of {SPACER_LENGTHS}, got {inner_spacer_length}"
+        )
 
     if rng is None:
         rng = random.Random()
@@ -446,7 +489,8 @@ def generate_at_rich_palindrome(
     half_length:
         Length of each AT-only arm.  Default is 6.
     spacer_length:
-        Length of the spacer.  Should be 2, 3, 4, 5, or 6.  Default is 2.
+        Length of the spacer.  Must be one of :data:`SPACER_LENGTHS`
+        (``(0, 2, 3, 4, 5, 6)``).  Default is 2.
     use_n_spacer:
         If ``True``, use ``'N'`` for all spacer positions.  Default is
         ``True``.
@@ -461,7 +505,8 @@ def generate_at_rich_palindrome(
     Raises
     ------
     ValueError
-        If *half_length* < 1 or *spacer_length* < 0.
+        If *half_length* < 1 or *spacer_length* is not in
+        :data:`SPACER_LENGTHS` (``(0, 2, 3, 4, 5, 6)``).
 
     Examples
     --------
@@ -475,8 +520,10 @@ def generate_at_rich_palindrome(
     """
     if half_length < 1:
         raise ValueError(f"half_length must be >= 1, got {half_length}")
-    if spacer_length < 0:
-        raise ValueError(f"spacer_length must be >= 0, got {spacer_length}")
+    if spacer_length not in SPACER_LENGTHS:
+        raise ValueError(
+            f"spacer_length must be one of {SPACER_LENGTHS}, got {spacer_length}"
+        )
 
     if rng is None:
         rng = random.Random()
