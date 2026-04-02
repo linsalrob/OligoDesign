@@ -350,13 +350,67 @@ def analyse_oligo(
 # ---------------------------------------------------------------------------
 
 
+def _record_to_oligo(record: dict):
+    """Convert a single JSON record to the appropriate oligo object.
+
+    Detects the type per-record by the presence of the ``'oligo_type'`` key,
+    which is written only by :class:`~OligoDesign.structured.StructuredOligo`.
+
+    Raises
+    ------
+    ValueError
+        If a required field is missing from the record.
+    """
+    if "oligo_type" in record:
+        from .structured import StructuredOligo
+
+        try:
+            return StructuredOligo(
+                sequence=record["sequence"],
+                oligo_type=record["oligo_type"],
+                left_arm=record["left_arm"],
+                right_arm=record["right_arm"],
+                spacer=record["spacer"],
+                inner_left=record["inner_left"],
+                inner_right=record["inner_right"],
+                name=record.get("name", ""),
+            )
+        except KeyError as exc:
+            raise ValueError(
+                f"Missing field {exc} in StructuredOligo record: {record!r}"
+            ) from exc
+
+    try:
+        return OligoAnalysis(
+            name=record["name"],
+            sequence=record["sequence"],
+            length=record["length"],
+            gc_content=record["gc_content"],
+            entropy=record["entropy"],
+            tm=record.get("tm"),
+            base_composition=record["base_composition"],
+            longest_homopolymer=record["longest_homopolymer"],
+            has_homopolymer=record["has_homopolymer"],
+            is_low_complexity=record["is_low_complexity"],
+            is_palindrome=record["is_palindrome"],
+            has_hairpin=record["has_hairpin"],
+            has_tandem_repeat=record["has_tandem_repeat"],
+            complementary_to=record.get("complementary_to", []),
+        )
+    except KeyError as exc:
+        raise ValueError(
+            f"Missing field {exc} in OligoAnalysis record: {record!r}"
+        ) from exc
+
+
 def read_json(path: str) -> list:
     """Read a JSON file written by :func:`write_json` and return a list of objects.
 
-    Automatically detects whether the file contains
-    :class:`OligoAnalysis` records (written by the random-oligo pipeline) or
-    :class:`~OligoDesign.structured.StructuredOligo` records (written by the
-    structured-oligo pipeline) and returns the appropriate type.
+    Automatically detects whether each record contains
+    :class:`OligoAnalysis` data (written by the random-oligo pipeline) or
+    :class:`~OligoDesign.structured.StructuredOligo` data (written by the
+    structured-oligo pipeline) and returns the appropriate type for each
+    record.  Mixed collections (containing both types) are handled correctly.
 
     Parameters
     ----------
@@ -365,7 +419,7 @@ def read_json(path: str) -> list:
 
     Returns
     -------
-    list[OligoAnalysis] | list[StructuredOligo]
+    list[OligoAnalysis | StructuredOligo]
         A list of reconstructed oligo objects.  The list is empty when the
         file contains an empty JSON array (``[]``).
 
@@ -398,60 +452,7 @@ def read_json(path: str) -> list:
             f"Expected a JSON array in {path!r}, got {type(data).__name__}"
         )
 
-    if not data:
-        return []
-
-    # Detect type by the presence of 'oligo_type', which is a field unique to
-    # StructuredOligo but absent from OligoAnalysis.
-    if "oligo_type" in data[0]:
-        from .structured import StructuredOligo
-
-        result = []
-        for record in data:
-            try:
-                obj = StructuredOligo(
-                    sequence=record["sequence"],
-                    oligo_type=record["oligo_type"],
-                    left_arm=record["left_arm"],
-                    right_arm=record["right_arm"],
-                    spacer=record["spacer"],
-                    inner_left=record["inner_left"],
-                    inner_right=record["inner_right"],
-                    name=record.get("name", ""),
-                )
-            except KeyError as exc:
-                raise ValueError(
-                    f"Missing field {exc} in StructuredOligo record: {record!r}"
-                ) from exc
-            result.append(obj)
-        return result
-
-    # Fall back to OligoAnalysis
-    result = []
-    for record in data:
-        try:
-            obj = OligoAnalysis(
-                name=record["name"],
-                sequence=record["sequence"],
-                length=record["length"],
-                gc_content=record["gc_content"],
-                entropy=record["entropy"],
-                tm=record.get("tm"),
-                base_composition=record["base_composition"],
-                longest_homopolymer=record["longest_homopolymer"],
-                has_homopolymer=record["has_homopolymer"],
-                is_low_complexity=record["is_low_complexity"],
-                is_palindrome=record["is_palindrome"],
-                has_hairpin=record["has_hairpin"],
-                has_tandem_repeat=record["has_tandem_repeat"],
-                complementary_to=record.get("complementary_to", []),
-            )
-        except KeyError as exc:
-            raise ValueError(
-                f"Missing field {exc} in OligoAnalysis record: {record!r}"
-            ) from exc
-        result.append(obj)
-    return result
+    return [_record_to_oligo(record) for record in data]
 
 
 def write_fasta(analyses: list[WritableOligo], path: str) -> None:

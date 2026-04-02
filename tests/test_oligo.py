@@ -527,6 +527,26 @@ class TestReadJson:
         with pytest.raises(ValueError, match="Expected a JSON array"):
             read_json(path)
 
+    def test_mixed_collection_round_trip(self, tmp_path) -> None:
+        """read_json must correctly handle a JSON file with both OligoAnalysis
+        and StructuredOligo records — each record is typed independently."""
+        from OligoDesign.structured import StructuredOligo, generate_palindromic_motif
+
+        analysis = analyse_oligo(DNA("ACGTACGT"), name="random_oligo")
+        structured = generate_palindromic_motif(half_length=6, rng=random.Random(0))
+        structured.name = "pal_oligo"
+
+        # write_json accepts any WritableOligo, so a mixed list is valid output
+        path = str(tmp_path / "mixed.json")
+        write_json([analysis, structured], path)
+
+        result = read_json(path)
+        assert len(result) == 2
+        assert isinstance(result[0], OligoAnalysis)
+        assert isinstance(result[1], StructuredOligo)
+        assert result[0].sequence == analysis.sequence
+        assert result[1].sequence == structured.sequence
+
 
 # ---------------------------------------------------------------------------
 # sequence_logo
@@ -534,6 +554,17 @@ class TestReadJson:
 
 
 class TestSequenceLogo:
+    """Tests for sequence_logo.
+
+    These tests are skipped automatically when the optional viz dependencies
+    (logomaker / matplotlib) are not installed.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _require_viz(self):
+        pytest.importorskip("logomaker")
+        pytest.importorskip("matplotlib")
+
     def _oligos(self) -> list[OligoAnalysis]:
         return [
             analyse_oligo(DNA("ACGTACGT"), name=f"o{i}") for i in range(5)
