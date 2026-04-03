@@ -36,6 +36,9 @@ _BASES = list("ACGT")
 # in logomaker's "fixed" mode, so reverse-alphabetical gives A at top.
 _BASES_REV_ALPHA = list("TGCA")
 
+_VALID_LOGO_TYPES = {"counts", "probability", "information"}
+_VALID_STACK_ORDERS = {"value", "alphabetical"}
+
 
 def _build_count_matrix(sequences: list[str]) -> "pandas.DataFrame":
     """Return a position × base count DataFrame.
@@ -162,16 +165,15 @@ def sequence_logo(
             "Install them with: pip install logomaker matplotlib"
         ) from exc
 
-    _VALID_TYPES = {"counts", "probability", "information"}
+    _VALID_TYPES = _VALID_LOGO_TYPES
     if logo_type not in _VALID_TYPES:
         raise ValueError(
             f"logo_type must be one of {sorted(_VALID_TYPES)!r}, got {logo_type!r}"
         )
 
-    _VALID_STACK = {"value", "alphabetical"}
-    if stack_order not in _VALID_STACK:
+    if stack_order not in _VALID_STACK_ORDERS:
         raise ValueError(
-            f"stack_order must be one of {sorted(_VALID_STACK)!r}, got {stack_order!r}"
+            f"stack_order must be one of {sorted(_VALID_STACK_ORDERS)!r}, got {stack_order!r}"
         )
 
     # ---- Load sequences ------------------------------------------------

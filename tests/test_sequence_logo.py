@@ -8,7 +8,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from OligoDesigner.sequence_logo import _build_count_matrix, _BASES_REV_ALPHA, sequence_logo
+from OligoDesigner.sequence_logo import (
+    _build_count_matrix,
+    _BASES_REV_ALPHA,
+    _VALID_STACK_ORDERS,
+    sequence_logo,
+)
 from OligoDesigner.sequence_logo_cli import _build_parser, main
 
 
@@ -99,6 +104,10 @@ def test_bases_rev_alpha_order():
     assert _BASES_REV_ALPHA == ["T", "G", "C", "A"]
 
 
+def test_valid_stack_orders_constant():
+    assert _VALID_STACK_ORDERS == {"value", "alphabetical"}
+
+
 # ---------------------------------------------------------------------------
 # sequence_logo_cli – --stack-order argument
 # ---------------------------------------------------------------------------
@@ -125,7 +134,8 @@ def test_cli_stack_order_value(tmp_path):
     from OligoDesigner.oligo import analyse_oligo, write_json
     from OligoDesigner.dna import DNA
 
-    oligos = [analyse_oligo(DNA("ACGTACGT"), name=f"o{i}") for i in range(5)]
+    seqs = ["ACGTACGT", "AACCGGTT", "TTGGCCAA", "GCTAGCTA", "TATACGCG"]
+    oligos = [analyse_oligo(DNA(s), name=f"o{i}") for i, s in enumerate(seqs)]
     json_path = str(tmp_path / "oligos.json")
     out_path = str(tmp_path / "logo.png")
     write_json(oligos, json_path)
@@ -139,7 +149,8 @@ def test_cli_stack_order_alphabetical(tmp_path):
     from OligoDesigner.oligo import analyse_oligo, write_json
     from OligoDesigner.dna import DNA
 
-    oligos = [analyse_oligo(DNA("ACGTACGT"), name=f"o{i}") for i in range(5)]
+    seqs = ["ACGTACGT", "AACCGGTT", "TTGGCCAA", "GCTAGCTA", "TATACGCG"]
+    oligos = [analyse_oligo(DNA(s), name=f"o{i}") for i, s in enumerate(seqs)]
     json_path = str(tmp_path / "oligos.json")
     out_path = str(tmp_path / "logo.png")
     write_json(oligos, json_path)
