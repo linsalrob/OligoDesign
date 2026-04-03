@@ -32,6 +32,10 @@ from typing import Union
 
 _BASES = list("ACGT")
 
+# Column order used when stack_order="alphabetical": columns run bottom → top
+# in logomaker's "fixed" mode, so reverse-alphabetical gives A at top.
+_BASES_REV_ALPHA = list("TGCA")
+
 
 def _build_count_matrix(sequences: list[str]) -> "pandas.DataFrame":
     """Return a position × base count DataFrame.
@@ -81,6 +85,7 @@ def sequence_logo(
     figsize: tuple[float, float] = (10.0, 3.0),
     color_scheme: str = "classic",
     dpi: int = 150,
+    stack_order: str = "value",
 ) -> None:
     """Generate a PNG sequence logo from a collection of oligonucleotides.
 
@@ -116,13 +121,22 @@ def sequence_logo(
         (default), ``"base_pairing"``, ``"NajafabadiEtAl2017"``.
     dpi:
         Resolution of the output PNG in dots per inch.  Default is 150.
+    stack_order:
+        Controls how bases are ordered (stacked) at each position.  One of:
+
+        * ``"value"`` – largest value at the bottom, smallest at the top
+          (default).
+        * ``"alphabetical"`` – bases are always in alphabetical order from the
+          top (A at top, C, G, T at bottom), giving a consistent visual layout
+          regardless of relative frequencies.
 
     Raises
     ------
     ImportError
         If ``logomaker`` or ``matplotlib`` is not installed.
     ValueError
-        If *source* is an empty collection, or *logo_type* is not recognised.
+        If *source* is an empty collection, *logo_type* is not recognised, or
+        *stack_order* is not recognised.
 
     Examples
     --------
@@ -152,6 +166,12 @@ def sequence_logo(
     if logo_type not in _VALID_TYPES:
         raise ValueError(
             f"logo_type must be one of {sorted(_VALID_TYPES)!r}, got {logo_type!r}"
+        )
+
+    _VALID_STACK = {"value", "alphabetical"}
+    if stack_order not in _VALID_STACK:
+        raise ValueError(
+            f"stack_order must be one of {sorted(_VALID_STACK)!r}, got {stack_order!r}"
         )
 
     # ---- Load sequences ------------------------------------------------
@@ -193,7 +213,14 @@ def sequence_logo(
 
     # ---- Draw ----------------------------------------------------------
     fig, ax = plt.subplots(figsize=figsize)
-    logomaker.Logo(logo_df, ax=ax, color_scheme=color_scheme)
+
+    if stack_order == "alphabetical":
+        # Reorder columns to T, G, C, A so that logomaker's "fixed" mode
+        # places T at the bottom and A at the top.
+        logo_df = logo_df[_BASES_REV_ALPHA]
+        logomaker.Logo(logo_df, ax=ax, color_scheme=color_scheme, stack_order="fixed")
+    else:  # value: largest at bottom
+        logomaker.Logo(logo_df, ax=ax, color_scheme=color_scheme, stack_order="small_on_top")
 
     ax.set_xlabel("Position")
     y_label = {"counts": "Count", "probability": "Probability", "information": "Bits"}
