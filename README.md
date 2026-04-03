@@ -127,6 +127,67 @@ generate-structured-oligos --type inverted_repeat -n 5 \
 
 ---
 
+### `generate-sequence-logo`
+
+Generates a sequence logo PNG image from a collection of DNA oligonucleotides. Accepts a JSON file produced by `generate-oligos` or `generate-structured-oligos`, or a plain FASTA file.
+
+```
+generate-sequence-logo INPUT OUTPUT [options]
+```
+
+#### Positional arguments
+
+| Argument | Description |
+|----------|-------------|
+| `INPUT` | Input file: JSON (from `generate-oligos` / `generate-structured-oligos`) or FASTA format |
+| `OUTPUT` | Output PNG file path |
+
+#### Logo options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--logo-type TYPE` | `counts` | Logo style: `counts` (raw nucleotide counts), `probability` (fraction of each base), or `information` (information-content bits) |
+| `--title TEXT` | *(none)* | Title to display above the logo |
+| `--color-scheme SCHEME` | `classic` | [logomaker](https://logomaker.readthedocs.io) colour scheme (e.g. `classic`, `base_pairing`, `NajafabadiEtAl2017`) |
+
+#### Figure options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--width W` | `10.0` | Figure width in inches |
+| `--height H` | `3.0` | Figure height in inches |
+| `--dpi N` | `150` | Output resolution in dots per inch |
+
+#### Input options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--format FMT` | `auto` | Input format: `auto` (detected from file extension), `json`, or `fasta` |
+
+#### Examples
+
+```bash
+# Generate oligos, save to JSON, then create a sequence logo
+generate-oligos --count 50 --length 40 --seed 1 --json oligos.json
+generate-sequence-logo oligos.json logo.png
+
+# Information-content logo with a custom title
+generate-sequence-logo oligos.json logo.png --logo-type information \
+  --title "Random oligos (n=50)"
+
+# From a FASTA file, high-resolution probability logo
+generate-sequence-logo sequences.fasta logo.png --format fasta \
+  --logo-type probability --dpi 300 --width 14 --height 4
+
+# From structured oligos JSON
+generate-structured-oligos --type palindrome --count 20 --seed 42 --json palindromes.json
+generate-sequence-logo palindromes.json palindromes_logo.png --logo-type information
+```
+
+> **Note:** The `viz` extras must be installed: `pip install ".[viz]"`
+
+---
+
 ## Python API
 
 OligoDesigner is designed as a library first. The following public classes and functions are available after `pip install .`:
